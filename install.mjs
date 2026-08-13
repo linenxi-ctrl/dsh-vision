@@ -4,30 +4,35 @@
  *
  * 用法：node install.mjs
  *
- * 实测结论（DSH 0.1.0-rc.6）：
- *  - host + client 插件（cordis.patch.yml）：name 必须用「包名」，需要把插件放进 profile 的 node_modules
- *  - agent 工具插件（agent preset）：name 支持「绝对路径」（DSH 会自动转 file:// URL）
+ * 它会自动完成全部安装，用户无需改任何配置文件：
+ *   1. 自动定位 DSH home（DSH_HOME 环境变量 / ~/.dsh / ~/.deepseek-harness / ~/.local/share/dsh）
+ *   2. 把 dsh-vision 复制到英文路径 <DSH_HOME>/dsh-vision（避开中文路径可能引起的乱码/解析问题）
+ *   3. 复制 dsh-vision 到每个 profile 的 node_modules（供 host + client 插件按包名解析）
+ *   4. 在每个 profile 的 cordis.patch.yml 里加入 vision 行（name: 'dsh-vision'）
+ *   5. 自动创建名为 vision 的 agent preset（复制随附 standard，避免 preset 名冲突被遮蔽），
+ *      并加入识图工具行（绝对路径指向英文路径副本）
+ *   6. 把默认 agent preset 设为 vision（写入 settings.yaml）
  *
- * 本脚本会：
- *   1. 把 dsh-vision 复制进每个 profile 的 node_modules（供 host + client 插件用包名解析）
- *   2. 在每个 profile 的 cordis.patch.yml 里加 vision 行
- *   3. 尽力把 screenshot/recognize_image 工具写进 agent preset（绝对路径）
+ * 实测要点（DSH 0.1.0-rc.6）：
+ *   - host + client 插件（cordis.patch.yml）：name 必须用「包名」，插件须在 profile 的 node_modules 里
+ *   - agent 工具插件（agent preset）：name 支持「绝对路径」（自动转 file:// URL）
+ *   - tool.js 必须零外部依赖（不能 import @deepseek-ai/* 的裸包），否则 preset 挂载时解析失败
+ *   - preset 名不能叫 standard（会被随附的 standard 遮蔽），要用不冲突的名字
  */
 import {
-  writeFileSync, existsSync, readFileSync, readdirSync, statSync, cpSync, mkdirSync,
+  writeFileSync, existsSync, readFileSync, readdirSync, statSync, cpSync, mkdirSync, rmSync,
 } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { createRequire } from 'node:module';
 
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)));
-const ABS = PLUGIN_DIR.split(sep).join('/'); // Windows 正斜杠，供 YAML 与 pathToFileURL
-const TOOL_PATH = `${ABS}/lib/tool.js`;
 
 const log = (m) => console.log(m);
 const section = (m) => { console.log('\n' + '='.repeat(56) + '\n' + m + '\n' + '='.repeat(56)); };
 
-// ── 定位 DSH home 与 profiles ──
+// ── 1. 定位 DSH home ──
 function findDshHome() {
   const home = homedir();
   const candidates = [];
@@ -40,29 +45,44 @@ function findDshHome() {
 }
 
 const dshHome = findDshHome();
-const profilesDir = dshHome ? join(dshHome, 'profiles') : null;
+if (!dshHome) {
+  console.error('未检测到 DSH home 目录。请先运行过 dsh（会生成 ~/.dsh），或设置 DSH_HOME 环境变量后重试。');
+  process.exit(1);
+}
+const profilesDir = join(dshHome, 'profiles');
+const presetsDir = join(dshHome, '.agent-presets');
+const EN_DIR = join(dshHome, 'dsh-vision'); // 英文路径副本
+const TOOL_PATH = `${EN_DIR.split(sep).join('/')}/lib/tool.js`;
 
-// ── 1. 复制 dsh-vision 到每个 profile 的 node_modules ──
+log(`DSH home：${dshHome}`);
+
+// ── 2. 复制到英文路径（供 tool 插件按绝对路径引用）──
+if (existsSync(EN_DIR)) rmSync(EN_DIR, { recursive: true, force: true });
+cpSync(PLUGIN_DIR, EN_DIR, { recursive: true });
+log(`✔ 已复制 dsh-vision 到英文路径：${EN_DIR}`);
+
+// ── 3. 复制到每个 profile 的 node_modules（供 host + client 按包名解析）──
 const installedProfiles = [];
-if (profilesDir && existsSync(profilesDir)) {
+if (existsSync(profilesDir)) {
   for (const name of readdirSync(profilesDir)) {
     const profileDir = join(profilesDir, name);
     if (!statSync(profileDir).isDirectory()) continue;
     const nm = join(profileDir, 'node_modules');
-    if (!existsSync(nm)) continue; // 无 node_modules 的 profile 跳过（例如随附 profile）
+    if (!existsSync(nm)) continue;
     const target = join(nm, 'dsh-vision');
-    cpSync(PLUGIN_DIR, target, { recursive: true, force: true });
+    if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+    cpSync(PLUGIN_DIR, target, { recursive: true });
     installedProfiles.push(name);
-    log(`✔ 已把 dsh-vision 复制进 profile「${name}」的 node_modules`);
+    log(`✔ 已复制 dsh-vision 进 profile「${name}」的 node_modules`);
   }
 }
 if (installedProfiles.length === 0) {
-  log('⚠ 未找到可写的 profile node_modules（.dsh/profiles/*/node_modules）。');
-  log('  请先用 dsh 跑过一次你的 profile，或手动把本目录复制进 profile 的 node_modules/dsh-vision。');
+  log('⚠ 未找到带 node_modules 的 profile（.dsh/profiles/*/node_modules）。');
+  log('  请先运行一次 dsh（会初始化 profile），或手动把本目录复制进 profile 的 node_modules/dsh-vision。');
 }
 
-// ── 2. 在每个 profile 的 cordis.patch.yml 加 vision 行 ──
-if (profilesDir && existsSync(profilesDir)) {
+// ── 4. 写每个 profile 的 cordis.patch.yml ──
+if (existsSync(profilesDir)) {
   for (const name of installedProfiles) {
     const patchPath = join(profilesDir, name, 'cordis.patch.yml');
     if (!existsSync(patchPath)) continue;
@@ -79,71 +99,111 @@ if (profilesDir && existsSync(profilesDir)) {
       "      name: 'dsh-vision'",
       '',
     ].join('\n');
-    if (content.trim() === '[]') {
-      content = content.replace('[]', insertBlock.trim() + '\n');
-    } else {
-      content = content.replace(/\s*$/, '') + '\n' + insertBlock;
-    }
+    content = content.trim() === '[]'
+      ? content.replace('[]', insertBlock.trim() + '\n')
+      : content.replace(/\s*$/, '') + '\n' + insertBlock;
     writeFileSync(patchPath, content, 'utf8');
-    log(`✔ 已在 profile「${name}」的 cordis.patch.yml 里加入 vision 行`);
+    log(`✔ 已在 profile「${name}」的 cordis.patch.yml 加入 vision 行`);
   }
 }
 
-// ── 3. 尽力写入 agent preset（绝对路径，agent-presets 原生支持） ──
-let presetNote = '';
-const presetsDir = dshHome ? join(dshHome, '.agent-presets') : null;
-if (presetsDir) {
-  try {
-    mkdirSync(presetsDir, { recursive: true });
-    const entries = readdirSync(presetsDir).filter((n) => {
-      try { return statSync(join(presetsDir, n)).isDirectory(); } catch { return false; }
-    });
-    const source = entries.includes('standard') ? 'standard' : entries[0];
-
-    if (!source) {
-      presetNote = `未在 ${presetsDir} 找到可复制的 preset（standard）。请在 Web 界面「Agent Preset」里复制 standard 后，在其 agent.cordis.yml 末尾追加：\n  - name: '${TOOL_PATH}'`;
-    } else {
-      const targetDir = join(presetsDir, source);
-      const cordisPath = join(targetDir, 'agent.cordis.yml');
-      if (!existsSync(cordisPath)) {
-        presetNote = `未在 preset「${source}」找到 agent.cordis.yml，请手动在其末尾追加：\n  - name: '${TOOL_PATH}'`;
-      } else {
-        const lines = readFileSync(cordisPath, 'utf8').split(/\r?\n/);
-        const has = lines.some((l) => l.includes('/lib/tool.js') || l.includes('dsh-vision/tool'));
-        if (has) {
-          log(`· preset「${source}」已含识图工具，跳过`);
-        } else {
-          const out = lines.slice();
-          while (out.length && out[out.length - 1].trim() === '') out.pop();
-          out.push(`- id: tool-vision`);
-          out.push(`  name: '${TOOL_PATH}'`);
-          out.push('');
-          writeFileSync(cordisPath, out.join('\n'), 'utf8');
-          log(`✔ 已把识图工具写入 preset「${source}」`);
-        }
-        presetNote = `识图工具已就绪（preset「${source}」）。新建会话即可让模型自己截图 + 识图。`;
-      }
+// ── 5. 找随附 preset 根目录（config/agent-presets）──
+function findShippedPresetsDir() {
+  // 从每个 profile 的 node_modules 解析 @deepseek-ai/dsh
+  if (existsSync(profilesDir)) {
+    for (const name of readdirSync(profilesDir)) {
+      const profileDir = join(profilesDir, name);
+      try {
+        const req = createRequire(join(profileDir, 'package.json'));
+        const dshPkg = req.resolve('@deepseek-ai/dsh/package.json');
+        const dir = join(dirname(dshPkg), 'config', 'agent-presets');
+        if (existsSync(dir)) return dir;
+      } catch { /* 该 profile 解析不到，继续 */ }
     }
-  } catch (err) {
-    presetNote = `自动写入 preset 失败（${err.message}）。请手动把下面这行加入 agent preset 的 agent.cordis.yml 末尾：\n  - name: '${TOOL_PATH}'`;
+  }
+  // 从当前进程的解析路径找
+  try {
+    const req = createRequire(import.meta.url);
+    const dshPkg = req.resolve('@deepseek-ai/dsh/package.json');
+    const dir = join(dirname(dshPkg), 'config', 'agent-presets');
+    if (existsSync(dir)) return dir;
+  } catch { /* 忽略 */ }
+  return null;
+}
+
+// ── 6. 创建 vision preset（复制随附 standard + 加工具行）──
+let presetNote = '';
+const shipped = findShippedPresetsDir();
+mkdirSync(presetsDir, { recursive: true });
+
+function addToolLine(cordisPath) {
+  const lines = readFileSync(cordisPath, 'utf8').split(/\r?\n/);
+  if (lines.some((l) => l.includes('tool-vision') || l.includes('/lib/tool.js'))) return false;
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  lines.push('- id: tool-vision');
+  lines.push(`  name: '${TOOL_PATH}'`);
+  lines.push('');
+  writeFileSync(cordisPath, lines.join('\n'), 'utf8');
+  return true;
+}
+
+const visionDir = join(presetsDir, 'vision');
+if (shipped) {
+  const shippedStandard = join(shipped, 'standard');
+  if (existsSync(join(shippedStandard, 'agent.cordis.yml'))) {
+    if (existsSync(visionDir)) rmSync(visionDir, { recursive: true, force: true });
+    cpSync(shippedStandard, visionDir, { recursive: true });
+    addToolLine(join(visionDir, 'agent.cordis.yml'));
+    log('✔ 已创建 preset「vision」（复制自随附 standard），并加入识图工具');
+    presetNote = '工具已就绪（preset「vision」）。重启后新建会话即可让模型自己截图 + 识图。';
+  } else {
+    presetNote = `随附 standard 不存在于 ${shippedStandard}，请手动复制一个 preset 后加：\n  - name: '${TOOL_PATH}'`;
   }
 } else {
-  presetNote = `未检测到 DSH home。请手动把下面这行加入 agent preset 的 agent.cordis.yml 末尾：\n  - name: '${TOOL_PATH}'`;
+  // 找不到随附根目录：从用户目录已有 preset 复制
+  const entries = existsSync(presetsDir) ? readdirSync(presetsDir).filter((n) => {
+    try { return statSync(join(presetsDir, n)).isDirectory(); } catch { return false; }
+  }) : [];
+  const source = entries.includes('standard') ? 'standard' : entries[0];
+  if (source) {
+    if (existsSync(visionDir)) rmSync(visionDir, { recursive: true, force: true });
+    cpSync(join(presetsDir, source), visionDir, { recursive: true });
+    addToolLine(join(visionDir, 'agent.cordis.yml'));
+    log(`✔ 已创建 preset「vision」（复制自用户 preset「${source}」），并加入识图工具`);
+    presetNote = '工具已就绪（preset「vision」）。重启后新建会话即可让模型自己截图 + 识图。';
+  } else {
+    presetNote = `未找到可复制的 preset。请手动创建 .agent-presets/vision/agent.cordis.yml 并加入：\n  - name: '${TOOL_PATH}'`;
+  }
 }
 
-// ── 4. 总结 ──
+// ── 7. 设置默认 preset = vision ──
+const settingsPath = join(dshHome, 'settings.yaml');
+try {
+  let s = readFileSync(settingsPath, 'utf8');
+  if (/agent-presets:\s*\n/.test(s)) {
+    s = s.replace(/agent-presets:\s*\n(?:  default:[^\n]*\n)?/, 'agent-presets:\n  default: vision\n');
+  } else {
+    s = s.trimEnd() + '\n\nagent-presets:\n  default: vision\n';
+  }
+  writeFileSync(settingsPath, s, 'utf8');
+  log('✔ 已把默认 agent preset 设为 vision（settings.yaml）');
+} catch (err) {
+  log(`⚠ 设置默认 preset 失败（${err.message}）。可手动在 settings.yaml 里加：\nagent-presets:\n  default: vision`);
+}
+
+// ── 8. 总结 ──
 section('安装完成');
-log(`插件源目录：${PLUGIN_DIR}`);
-log(`DSH home：${dshHome ?? '（未检测到）'}`);
+log(`DSH home：${dshHome}`);
 if (installedProfiles.length) log(`已安装 profile：${installedProfiles.join('、')}`);
 log('');
 log('【下一步】');
 log('1. 重启 DSH（关闭后重新运行：dsh web）。');
 log('2. 打开网页，点右下角「🖼️ 识图」按钮，填写外挂识图模型的地址/密钥/模型名，保存。');
-log('3. 拖一张图片进页面即可自动识图并回传给 DeepSeek。');
+log('3. 在面板点「📤 发送图片给识图 AI」选图，即可识图并回传 DeepSeek。');
+if (presetNote) {
+  log('');
+  log('【让模型自己截图识图（agent 工具）】');
+  log(presetNote);
+}
 log('');
-log('【让模型自己截图识图（agent 工具）】');
-log(presetNote);
-log('');
-log('提示：如果移动了本插件源目录，请重新运行 node install.mjs；');
-log('host/client 插件通过 profile node_modules 里的副本加载，tool 插件通过上面的绝对路径加载。');
+log('提示：如果移动了本插件源目录，请重新运行 node install.mjs（会自动重建英文副本与 preset）。');
