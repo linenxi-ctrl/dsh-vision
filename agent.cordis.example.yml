@@ -1,0 +1,11 @@
+# dsh-vision 工具插件挂载示例 —— 追加到 agent preset 的 agent.cordis.yml 末尾
+#
+# 作用：为该 preset 组装出的每个 agent 提供 screenshot（截屏）与 recognize_image（识图）工具，
+#       并注入提示词，让模型能自主「截图 → 识图 → 等待结果」。
+#
+# 两种写法任选其一：
+#   1) 绝对路径（不依赖 node_modules 位置，最稳）：
+- name: 'C:/Users/Administrator/Documents/插件/dsh-vision/lib/tool.js'
+#
+#   2) 包名子路径（需已把 dsh-vision 放进 DSH 可解析的 node_modules）：
+# - name: 'dsh-vision/tool'

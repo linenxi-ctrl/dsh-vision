@@ -1,0 +1,20 @@
+# Node
+node_modules/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器 / IDE
+.vscode/
+.idea/
+*.swp
+
+# 临时文件
+*.tmp
+*.bak
