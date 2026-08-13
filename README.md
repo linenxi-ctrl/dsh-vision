@@ -1,5 +1,10 @@
 # dsh-vision —— DeepSeek Harness 外挂识图模型插件
 
+![License](https://img.shields.io/badge/License-MIT-blue)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-blueviolet)
+![Version](https://img.shields.io/badge/version-v0.1.0-green)
+
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 增加「外挂识图模型」能力：让本来不具备视觉能力的模型，通过一个可自定义地址/密钥/提示词的外部视觉模型来「看懂」图片与屏幕。
 
 ## 功能
