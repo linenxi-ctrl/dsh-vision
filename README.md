@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-blueviolet)
-![Version](https://img.shields.io/badge/version-v0.1.0-green)
+![Version](https://img.shields.io/badge/version-v0.2.0-green)
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 增加「外挂识图模型」能力：让本来不具备视觉能力的模型，通过一个可自定义地址/密钥/提示词的外部视觉模型来「看懂」图片与屏幕。
 
@@ -20,10 +20,10 @@
 dsh-vision/
 ├── install.bat        # Windows 一键安装（双击）
 ├── install.sh         # macOS/Linux 一键安装
-├── install.mjs        # 安装脚本本体（复制进 profile node_modules + 写 cordis.patch.yml + 写 preset）
+├── install.mjs        # 安装脚本本体（npm 场景只做 agent 工具平面；目录场景全自动）
 ├── bootstrap-node.ps1 # Windows 引导脚本：未装 Node.js 时从国内镜像自动下载免安装版
-├── package.json       # 包定义（host + client 双面；tool 为独立子路径）
-├── vision.patch.yml   # 插件挂载示例（install.mjs 会自动写入你的 cordis.patch.yml）
+├── package.json       # 包定义（dsh.bundle + dsh.client 声明；tool 为独立子路径）
+├── cordis.patch.yml   # 插件挂载声明（dsh.bundle.patch 自动应用到 profile layer）
 ├── lib/
 │   ├── index.js       # host 平面插件：识图服务 + 协议适配 + settings 配置 + HTTP 路由
 │   ├── tool.js        # agent 工具插件：recognize_image / screenshot + 提示词注入
@@ -51,39 +51,33 @@ dsh-vision/
 
 识图请求在 **host（Node）侧**发起，因此不受浏览器 CORS 限制；图片请求走同源 `/api/vision/recognize`，同样无 CORS 问题。
 
-## 安装（一键，零代码）
+## 安装
 
-> 实测（DSH 0.1.0-rc.6）：**host + client 插件的 `name` 必须用「包名」**（插件要放进 profile 的 `node_modules`）；**agent 工具插件则支持「绝对路径」**。`install.mjs` 已按此正确方式自动处理。
+> 两种方式任选：**npm 安装**（标准，推荐）或**手动 / 离线**（下载 zip，无需 pnpm）。
 
-### 方式一：一键安装（推荐，面向小白）
+### 方式一：npm 安装（推荐）
 
-1. 双击 `install.bat`（Windows）或运行 `bash install.sh`（macOS/Linux）——**无需预装 Node.js**：脚本检测不到时会自动从国内镜像（npmmirror / 华为云 / 腾讯云）下载免安装版（无需管理员权限），并缓存在 `~/.dsh/node-runtime` 供下次复用；
-2. 脚本会自动：把 `dsh-vision` 复制进每个 profile 的 `node_modules`、在 `cordis.patch.yml` 加 vision 行、把识图工具写进 agent preset；
+需要系统已装 [Node.js 18+](https://nodejs.org) 与 [pnpm](https://pnpm.io/zh/installation)。
+
+```bash
+# 在 DSH 的 web profile 安装本插件（DSH 自动把 cordis.patch.yml 加入 profile layer）
+dsh plugin --profile web add @linenxi-ctrl/dsh-vision
+
+# （可选）配置 agent 工具平面：让模型能自己截图 + 识图
+node ~/.dsh/profiles/web/node_modules/@linenxi-ctrl/dsh-vision/install.mjs
+```
+
+安装后**无需手动改任何配置文件**：`package.json` 的 `dsh.bundle.patch` 声明会被 DSH 自动 reconcile 进 profile 的 `dsh.profile.bundles`，`cordis.patch.yml` 即成为该 profile 的一个 bundle layer。
+
+### 方式二：手动 / 离线（无需 pnpm，小白友好）
+
+从 [Releases](https://github.com/linenxi-ctrl/dsh-vision/releases) 下载 zip 解压：
+
+1. Windows 双击 `install.bat`，macOS/Linux 运行 `bash install.sh`——**无需预装 Node.js**：脚本检测不到时会自动从国内镜像（npmmirror / 华为云 / 腾讯云）下载免安装版（无需管理员权限）；
+2. 脚本会自动：复制英文副本、复制进每个 profile 的 `node_modules`、在 `cordis.patch.yml` 加 vision 行、创建 agent preset `vision`（复制随附 standard 并加入识图工具）并设为默认；
 3. **重启 DSH**（关闭后重新 `dsh web`）。
 
-启动后点右下角鲸鱼按钮填地址，全程不改任何代码。
-
-### 方式二：手动（等价操作）
-
-1. 把 `dsh-vision` 目录复制进 profile 的 `node_modules/dsh-vision/`；
-2. 在该 profile 的 `cordis.patch.yml` 里加：
-
-   ```yaml
-   - insert:
-       - id: vision
-         name: 'dsh-vision'
-   ```
-
-3. 重启 `dsh web`。
-
-4. （可选，让模型自己截图/识图）在 agent preset 的 `agent.cordis.yml` 末尾加一行（**绝对路径**，DSH 会自动转 `file://`）：
-
-   ```yaml
-   - id: tool-vision
-     name: 'C:/你的路径/dsh-vision/lib/tool.js'
-   ```
-
-> 说明：`cordis.patch.yml` 里那一行是「双面」插件——同时挂载 host 插件（`lib/index.js`）与客户端插件（`lib/client.js`）。这两者按**包名**从 profile 的 `node_modules` 解析；而 agent preset 里的工具行按**绝对路径**加载（agent-presets 会转 `file://` 并注入宿主 base 解析依赖）。
+> 实测要点（DSH 0.1.0-rc.6）：host + client 插件（`cordis.patch.yml`）的 `name` 必须用「包名」，插件须在 profile 的 `node_modules` 下；agent 工具插件（preset）的 `name` 支持绝对路径（自动转 `file://`）；agent preset 不能叫 `standard`（会被随附 standard 遮蔽）。
 
 ## 配置
 

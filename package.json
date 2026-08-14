@@ -1,7 +1,7 @@
 {
-  "name": "dsh-vision",
-  "version": "0.1.0",
-  "description": "为 DeepSeek Harness 提供外挂识图模型：网页配置面板、拖图自动识图回传、以及模型可调用的识图/截图工具。",
+  "name": "@linenxi-ctrl/dsh-vision",
+  "version": "0.2.0",
+  "description": "为 DeepSeek Harness 提供外挂识图模型：网页配置面板、发送图片识图自动回传、模型自主截图识图工具，支持多协议与一键安装。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -14,6 +14,7 @@
     "./client": {
       "default": "./lib/client.js"
     },
+    "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
@@ -24,10 +25,13 @@
     "install.bat",
     "install.sh",
     "bootstrap-node.ps1",
-    "vision.patch.yml",
+    "cordis.patch.yml",
     "README.md"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-connection",

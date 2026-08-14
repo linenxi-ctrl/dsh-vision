@@ -18,3 +18,6 @@ desktop.ini
 # 临时文件
 *.tmp
 *.bak
+
+# npm pack 产物
+*.tgz

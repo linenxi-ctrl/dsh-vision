@@ -1,0 +1,10 @@
+# dsh-vision 宿主 + 客户端插件挂载（dsh.bundle.patch 自动应用）
+#
+# 通过 npm / dsh plugin add 安装后，DSH 会读取 package.json 的 dsh.bundle.patch，
+# 自动把本文件加入 profile 的 layer stack，无需手动修改 profile 的 cordis.patch.yml。
+#
+# 关键：host + client 插件（这一行）的 name 必须用「包名」，且包位于 profile 的 node_modules 下。
+
+- insert:
+    - id: vision
+      name: '@linenxi-ctrl/dsh-vision'

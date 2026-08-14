@@ -4,8 +4,8 @@
 #       并注入提示词，让模型能自主「截图 → 识图 → 等待结果」。
 #
 # 两种写法任选其一：
-#   1) 绝对路径（不依赖 node_modules 位置，最稳）：
-- name: 'C:/Users/Administrator/Documents/插件/dsh-vision/lib/tool.js'
+#   1) 绝对路径（不依赖 node_modules 位置，最稳；install.mjs 自动写入这个形式）：
+# - name: 'C:/你的路径/@linenxi-ctrl/dsh-vision/lib/tool.js'
 #
-#   2) 包名子路径（需已把 dsh-vision 放进 DSH 可解析的 node_modules）：
-# - name: 'dsh-vision/tool'
+#   2) 包名子路径（需已通过 npm / dsh plugin add 安装，DSH 能解析到包）：
+# - name: '@linenxi-ctrl/dsh-vision/tool'

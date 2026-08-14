@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /**
- * dsh-vision 一键安装脚本（零依赖，Node 18+ 跨平台）
+ * @linenxi-ctrl/dsh-vision 安装脚本（零依赖，Node 18+ 跨平台）
  *
- * 用法：node install.mjs
+ * 两种运行场景，自动识别：
+ *   A) npm 插件场景（包已通过 `dsh plugin --profile web add @linenxi-ctrl/dsh-vision` 装进
+ *      profile 的 node_modules）：cordis.patch.yml 由 DSH 的 dsh.bundle 机制自动应用，
+ *      本脚本只负责 agent 工具平面（创建 vision preset + 设默认 preset）。
+ *   B) 目录场景（下载 zip 解压后直接 `node install.mjs`）：除 agent 工具平面外，
+ *      额外完成英文副本、复制进 profile node_modules、写 cordis.patch.yml。
  *
- * 它会自动完成全部安装，用户无需改任何配置文件：
- *   1. 自动定位 DSH home（DSH_HOME 环境变量 / ~/.dsh / ~/.deepseek-harness / ~/.local/share/dsh）
- *   2. 把 dsh-vision 复制到英文路径 <DSH_HOME>/dsh-vision（避开中文路径可能引起的乱码/解析问题）
- *   3. 复制 dsh-vision 到每个 profile 的 node_modules（供 host + client 插件按包名解析）
- *   4. 在每个 profile 的 cordis.patch.yml 里加入 vision 行（name: 'dsh-vision'）
- *   5. 自动创建名为 vision 的 agent preset（复制随附 standard，避免 preset 名冲突被遮蔽），
- *      并加入识图工具行（绝对路径指向英文路径副本）
- *   6. 把默认 agent preset 设为 vision（写入 settings.yaml）
+ * 两种场景都会自动：
+ *   1. 定位 DSH home（DSH_HOME / ~/.dsh / ~/.deepseek-harness / ~/.local/share/dsh）
+ *   2. 创建名为 vision 的 agent preset（复制随附 standard，避免 preset 名冲突被遮蔽），
+ *      并加入识图工具行（绝对路径指向本包 lib/tool.js，跨场景最稳）
+ *   3. 把默认 agent preset 设为 vision（写入 settings.yaml）
  *
  * 实测要点（DSH 0.1.0-rc.6）：
  *   - host + client 插件（cordis.patch.yml）：name 必须用「包名」，插件须在 profile 的 node_modules 里
@@ -28,6 +30,11 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)));
+const PKG_NAME = '@linenxi-ctrl/dsh-vision';
+/** 是否位于 node_modules 内（npm / dsh plugin add 安装场景）。 */
+const IN_NODE_MODULES = PLUGIN_DIR.split(sep).includes('node_modules');
+/** 工具插件挂载点：绝对路径指向本包 lib/tool.js（两种场景都稳定）。 */
+const TOOL_PATH = `${PLUGIN_DIR.split(sep).join('/')}/lib/tool.js`;
 
 const log = (m) => console.log(m);
 const section = (m) => { console.log('\n' + '='.repeat(56) + '\n' + m + '\n' + '='.repeat(56)); };
@@ -51,63 +58,66 @@ if (!dshHome) {
 }
 const profilesDir = join(dshHome, 'profiles');
 const presetsDir = join(dshHome, '.agent-presets');
-const EN_DIR = join(dshHome, 'dsh-vision'); // 英文路径副本
-const TOOL_PATH = `${EN_DIR.split(sep).join('/')}/lib/tool.js`;
 
 log(`DSH home：${dshHome}`);
+log(`运行场景：${IN_NODE_MODULES ? 'npm 插件（位于 node_modules 内）' : '目录（手动/离线）'}`);
 
-// ── 2. 复制到英文路径（供 tool 插件按绝对路径引用）──
-if (existsSync(EN_DIR)) rmSync(EN_DIR, { recursive: true, force: true });
-cpSync(PLUGIN_DIR, EN_DIR, { recursive: true });
-log(`✔ 已复制 dsh-vision 到英文路径：${EN_DIR}`);
-
-// ── 3. 复制到每个 profile 的 node_modules（供 host + client 按包名解析）──
+// ── 2. 目录场景：英文副本 + 复制进 profile node_modules + 写 cordis.patch.yml ──
 const installedProfiles = [];
-if (existsSync(profilesDir)) {
-  for (const name of readdirSync(profilesDir)) {
-    const profileDir = join(profilesDir, name);
-    if (!statSync(profileDir).isDirectory()) continue;
-    const nm = join(profileDir, 'node_modules');
-    if (!existsSync(nm)) continue;
-    const target = join(nm, 'dsh-vision');
-    if (existsSync(target)) rmSync(target, { recursive: true, force: true });
-    cpSync(PLUGIN_DIR, target, { recursive: true });
-    installedProfiles.push(name);
-    log(`✔ 已复制 dsh-vision 进 profile「${name}」的 node_modules`);
-  }
-}
-if (installedProfiles.length === 0) {
-  log('⚠ 未找到带 node_modules 的 profile（.dsh/profiles/*/node_modules）。');
-  log('  请先运行一次 dsh（会初始化 profile），或手动把本目录复制进 profile 的 node_modules/dsh-vision。');
-}
+if (!IN_NODE_MODULES) {
+  const EN_DIR = join(dshHome, 'dsh-vision');
+  if (existsSync(EN_DIR)) rmSync(EN_DIR, { recursive: true, force: true });
+  cpSync(PLUGIN_DIR, EN_DIR, { recursive: true });
+  log(`✔ 已复制 dsh-vision 到英文路径：${EN_DIR}`);
 
-// ── 4. 写每个 profile 的 cordis.patch.yml ──
-if (existsSync(profilesDir)) {
-  for (const name of installedProfiles) {
-    const patchPath = join(profilesDir, name, 'cordis.patch.yml');
-    if (!existsSync(patchPath)) continue;
-    let content = readFileSync(patchPath, 'utf8');
-    if (content.includes('dsh-vision') || content.includes('id: vision')) {
-      log(`· profile「${name}」的 cordis.patch.yml 已含 vision 行，跳过`);
-      continue;
+  if (existsSync(profilesDir)) {
+    for (const name of readdirSync(profilesDir)) {
+      const profileDir = join(profilesDir, name);
+      if (!statSync(profileDir).isDirectory()) continue;
+      const nm = join(profileDir, 'node_modules');
+      if (!existsSync(nm)) continue;
+      const target = join(nm, '@linenxi-ctrl', 'dsh-vision');
+      if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+      cpSync(PLUGIN_DIR, target, { recursive: true });
+      installedProfiles.push(name);
+      log(`✔ 已复制 dsh-vision 进 profile「${name}」的 node_modules`);
     }
-    const insertBlock = [
-      '',
-      '# dsh-vision：外挂识图插件（host 服务 + 客户端按钮，双面）',
-      '- insert:',
-      '    - id: vision',
-      "      name: 'dsh-vision'",
-      '',
-    ].join('\n');
-    content = content.trim() === '[]'
-      ? content.replace('[]', insertBlock.trim() + '\n')
-      : content.replace(/\s*$/, '') + '\n' + insertBlock;
-    writeFileSync(patchPath, content, 'utf8');
-    log(`✔ 已在 profile「${name}」的 cordis.patch.yml 加入 vision 行`);
   }
+  if (installedProfiles.length === 0) {
+    log('⚠ 未找到带 node_modules 的 profile（.dsh/profiles/*/node_modules）。');
+    log('  请先运行一次 dsh（会初始化 profile），或改用 npm 方式安装。');
+  }
+
+  // 写每个 profile 的 cordis.patch.yml（幂等：已含则跳过）
+  if (existsSync(profilesDir)) {
+    for (const name of installedProfiles) {
+      const patchPath = join(profilesDir, name, 'cordis.patch.yml');
+      if (!existsSync(patchPath)) continue;
+      let content = readFileSync(patchPath, 'utf8');
+      if (content.includes(PKG_NAME) || content.includes('id: vision')) {
+        log(`· profile「${name}」的 cordis.patch.yml 已含 vision 行，跳过`);
+        continue;
+      }
+      const insertBlock = [
+        '',
+        `# ${PKG_NAME}：外挂识图插件（host 服务 + 客户端按钮，双面）`,
+        '- insert:',
+        '    - id: vision',
+        `      name: '${PKG_NAME}'`,
+        '',
+      ].join('\n');
+      content = content.trim() === '[]'
+        ? content.replace('[]', insertBlock.trim() + '\n')
+        : content.replace(/\s*$/, '') + '\n' + insertBlock;
+      writeFileSync(patchPath, content, 'utf8');
+      log(`✔ 已在 profile「${name}」的 cordis.patch.yml 加入 vision 行`);
+    }
+  }
+} else {
+  log('· npm 场景：cordis.patch.yml 已由 dsh.bundle 机制自动应用，无需手动写入');
 }
 
-// ── 5. 找随附 preset 根目录（config/agent-presets）──
+// ── 3. 找随附 preset 根目录（config/agent-presets）──
 function findShippedPresetsDir() {
   // 从每个 profile 的 node_modules 解析 @deepseek-ai/dsh
   if (existsSync(profilesDir)) {
@@ -131,7 +141,7 @@ function findShippedPresetsDir() {
   return null;
 }
 
-// ── 6. 创建 vision preset（复制随附 standard + 加工具行）──
+// ── 4. 创建 vision preset（复制随附 standard + 加工具行）──
 let presetNote = '';
 const shipped = findShippedPresetsDir();
 mkdirSync(presetsDir, { recursive: true });
@@ -176,7 +186,7 @@ if (shipped) {
   }
 }
 
-// ── 7. 设置默认 preset = vision ──
+// ── 5. 设置默认 preset = vision ──
 const settingsPath = join(dshHome, 'settings.yaml');
 try {
   let s = readFileSync(settingsPath, 'utf8');
@@ -191,14 +201,14 @@ try {
   log(`⚠ 设置默认 preset 失败（${err.message}）。可手动在 settings.yaml 里加：\nagent-presets:\n  default: vision`);
 }
 
-// ── 8. 总结 ──
+// ── 6. 总结 ──
 section('安装完成');
 log(`DSH home：${dshHome}`);
 if (installedProfiles.length) log(`已安装 profile：${installedProfiles.join('、')}`);
 log('');
 log('【下一步】');
 log('1. 重启 DSH（关闭后重新运行：dsh web）。');
-log('2. 打开网页，点右下角「🖼️ 识图」按钮，填写外挂识图模型的地址/密钥/模型名，保存。');
+log('2. 打开网页，点右下角鲸鱼按钮，填写外挂识图模型的地址/密钥/模型名，保存。');
 log('3. 在面板点「📤 发送图片给识图 AI」选图，即可识图并回传 DeepSeek。');
 if (presetNote) {
   log('');
@@ -206,4 +216,4 @@ if (presetNote) {
   log(presetNote);
 }
 log('');
-log('提示：如果移动了本插件源目录，请重新运行 node install.mjs（会自动重建英文副本与 preset）。');
+log('提示：目录场景移动了源目录后，重新运行 node install.mjs 即可自动重建英文副本与 preset。');
