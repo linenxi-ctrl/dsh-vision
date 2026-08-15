@@ -94,6 +94,15 @@ if (!IN_NODE_MODULES) {
       const patchPath = join(profilesDir, name, 'cordis.patch.yml');
       if (!existsSync(patchPath)) continue;
       let content = readFileSync(patchPath, 'utf8');
+      content = content.replace(/^\uFEFF/, ''); // 去掉 UTF-8 BOM（Windows 编辑器可能写入）
+      // 修复历史 bug 产物：cordis.patch.yml 中 [] 与 - insert: 并存（非法 YAML，
+      // 会导致 DSH 报 "end of the stream or a document separator is expected" 而打不开）
+      const fixed = content.replace(/^\s*\[\][ \t]*\r?\n?/m, '');
+      if (fixed !== content) {
+        writeFileSync(patchPath, fixed, 'utf8');
+        log(`✔ 已修复 profile「${name}」的 cordis.patch.yml（移除多余的 []，DSH 之前因此无法启动）`);
+        content = fixed;
+      }
       if (content.includes(PKG_NAME) || content.includes('id: vision')) {
         log(`· profile「${name}」的 cordis.patch.yml 已含 vision 行，跳过`);
         continue;
@@ -105,12 +114,9 @@ if (!IN_NODE_MODULES) {
         `      name: '${PKG_NAME}'`,
         '',
       ].join('\n');
-      // 修复：去掉 UTF-8 BOM（Windows 编辑器可能写入），并正确合并补丁列表
-      content = content.replace(/^\uFEFF/, '');
       const trimmed = content.trim();
       if (trimmed === '' || trimmed === '[]') {
-        // 空文件或空列表：整体替换为补丁列表（绝不能保留 [] 再追加 - insert:，
-        // 否则 YAML 解析报 "end of the stream or a document separator is expected"）
+        // 空文件或空列表：整体替换为补丁列表（绝不能保留 [] 再追加 - insert:）
         content = insertBlock;
       } else {
         content = trimmed.replace(/\s*$/, '') + '\n' + insertBlock;
