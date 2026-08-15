@@ -62,6 +62,20 @@ function removeVisionBlock(content) {
   return out;
 }
 
+/** 确保内容是合法的顶层 YAML 数组：移除 vision 后若只剩注释或空，补回空数组 []。 */
+function ensureTopLevelArray(content) {
+  const hasItem = content.split(/\r?\n/).some((line) => {
+    const t = line.trim();
+    return t.startsWith('- ') && !t.startsWith('#');
+  });
+  if (hasItem) return content;
+  const comments = content.split(/\r?\n/)
+    .filter((line) => line.trim().startsWith('#'))
+    .join('\n')
+    .trim();
+  return comments ? comments + '\n[]\n' : '[]\n';
+}
+
 /** 从 settings.yaml 移除 agent-presets 段里的 default: vision；段空则删除整段。 */
 function removeDefaultVision(content) {
   const lines = content.split(/\r?\n/);
@@ -136,7 +150,7 @@ if (!IN_NODE_MODULES && existsSync(profilesDir)) {
       const before = readFileSync(patchPath, 'utf8');
       const after = removeVisionBlock(before);
       if (after !== before) {
-        writeFileSync(patchPath, after, 'utf8');
+        writeFileSync(patchPath, ensureTopLevelArray(after), 'utf8');
         log(`✔ 已从 profile「${name}」的 cordis.patch.yml 移除 vision 挂载行`);
       }
     }
