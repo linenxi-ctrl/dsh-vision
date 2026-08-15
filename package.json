@@ -1,59 +1,59 @@
-{
-  "name": "@linenxi-ctrl/dsh-vision",
-  "version": "0.2.3",
-  "description": "为 DeepSeek Harness 提供外挂识图模型：网页配置面板、发送图片识图自动回传、模型自主截图识图工具，支持多协议与一键安装/卸载。",
-  "type": "module",
-  "main": "lib/index.js",
-  "exports": {
-    ".": {
-      "default": "./lib/index.js"
-    },
-    "./tool": {
-      "default": "./lib/tool.js"
-    },
-    "./client": {
-      "default": "./lib/client.js"
-    },
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "lib/index.js",
-    "lib/tool.js",
-    "lib/client.js",
-    "install.mjs",
-    "install.bat",
-    "install.sh",
-    "uninstall.mjs",
-    "uninstall.bat",
-    "uninstall.sh",
-    "bootstrap-node.ps1",
-    "cordis.patch.yml",
-    "README.md"
-  ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-runtime"
-      ],
-      "platform": "web",
-      "immediately": true
-    }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
-    "@deepseek-ai/schemastery": "^3.18.1"
-  },
-  "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  }
+﻿{
+    "name":  "@linenxi-ctrl/dsh-vision",
+    "version":  "0.2.4",
+    "description":  "为 DeepSeek Harness 提供外挂识图模型：网页配置面板、发送图片识图自动回传、模型自主截图识图工具，支持多协议与一键安装/卸载。",
+    "type":  "module",
+    "main":  "lib/index.js",
+    "exports":  {
+                    ".":  {
+                              "default":  "./lib/index.js"
+                          },
+                    "./tool":  {
+                                   "default":  "./lib/tool.js"
+                               },
+                    "./client":  {
+                                     "default":  "./lib/client.js"
+                                 },
+                    "./cordis.patch.yml":  "./cordis.patch.yml",
+                    "./package.json":  "./package.json"
+                },
+    "files":  [
+                  "lib/index.js",
+                  "lib/tool.js",
+                  "lib/client.js",
+                  "install.mjs",
+                  "install.bat",
+                  "install.sh",
+                  "uninstall.mjs",
+                  "uninstall.bat",
+                  "uninstall.sh",
+                  "bootstrap-node.ps1",
+                  "cordis.patch.yml",
+                  "README.md"
+              ],
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "inject":  [
+                                              "@deepseek-ai/dsh-client-connection",
+                                              "@deepseek-ai/dsh-client-runtime"
+                                          ],
+                               "platform":  "web",
+                               "immediately":  true
+                           }
+            },
+    "peerDependencies":  {
+                             "@deepseek-ai/cordis":  "^4.0.1",
+                             "@deepseek-ai/dsh-tools":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-system-prompt":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-settings":  "^0.1.0-rc.6",
+                             "@deepseek-ai/dsh-host-webserver":  "^0.1.0-rc.6",
+                             "@deepseek-ai/schemastery":  "^3.18.1"
+                         },
+    "license":  "MIT",
+    "publishConfig":  {
+                          "access":  "public"
+                      }
 }
