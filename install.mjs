@@ -99,16 +99,22 @@ if (!IN_NODE_MODULES) {
         continue;
       }
       const insertBlock = [
-        '',
         `# ${PKG_NAME}：外挂识图插件（host 服务 + 客户端按钮，双面）`,
         '- insert:',
         '    - id: vision',
         `      name: '${PKG_NAME}'`,
         '',
       ].join('\n');
-      content = content.trim() === '[]'
-        ? content.replace('[]', insertBlock.trim() + '\n')
-        : content.replace(/\s*$/, '') + '\n' + insertBlock;
+      // 修复：去掉 UTF-8 BOM（Windows 编辑器可能写入），并正确合并补丁列表
+      content = content.replace(/^\uFEFF/, '');
+      const trimmed = content.trim();
+      if (trimmed === '' || trimmed === '[]') {
+        // 空文件或空列表：整体替换为补丁列表（绝不能保留 [] 再追加 - insert:，
+        // 否则 YAML 解析报 "end of the stream or a document separator is expected"）
+        content = insertBlock;
+      } else {
+        content = trimmed.replace(/\s*$/, '') + '\n' + insertBlock;
+      }
       writeFileSync(patchPath, content, 'utf8');
       log(`✔ 已在 profile「${name}」的 cordis.patch.yml 加入 vision 行`);
     }
