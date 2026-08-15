@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-blueviolet)
-![Version](https://img.shields.io/badge/version-v0.2.2-green)
+![Version](https://img.shields.io/badge/version-v0.2.3-green)
 ![npm](https://img.shields.io/npm/v/@linenxi-ctrl/dsh-vision)
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 增加「外挂识图模型」能力：让本来不具备视觉能力的模型，通过一个可自定义地址/密钥/提示词的外部视觉模型来「看懂」图片与屏幕。
@@ -79,6 +79,20 @@ node ~/.dsh/profiles/web/node_modules/@linenxi-ctrl/dsh-vision/install.mjs
 3. **重启 DSH**（关闭后重新 `dsh web`）。
 
 > 实测要点（DSH 0.1.0-rc.6）：host + client 插件（`cordis.patch.yml`）的 `name` 必须用「包名」，插件须在 profile 的 `node_modules` 下；agent 工具插件（preset）的 `name` 支持绝对路径（自动转 `file://`）；agent preset 不能叫 `standard`（会被随附 standard 遮蔽）。
+
+### 更新与卸载
+
+**更新**：先卸载旧版，再安装新版即可（`cordis.patch.yml` 与 preset 会自动重建）。
+
+**一键卸载**：
+
+- Windows：双击 `uninstall.bat`
+- macOS/Linux：运行 `bash uninstall.sh`
+- 任意平台：`node uninstall.mjs`
+
+卸载脚本会自动：删除英文副本与 profile `node_modules` 里的插件、从 `cordis.patch.yml` 移除 vision 挂载行、删除 agent preset「vision」、恢复 `settings.yaml` 的默认 preset。
+
+> npm 方式安装的插件，请先用 `dsh plugin --profile web remove @linenxi-ctrl/dsh-vision` 卸载 npm 包，再跑上面的卸载脚本清理 preset 与设置。
 
 ## 配置
 
