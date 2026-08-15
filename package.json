@@ -1,6 +1,6 @@
-﻿{
+{
     "name":  "@linenxi-ctrl/dsh-vision",
-    "version":  "0.2.4",
+    "version": "0.2.5",
     "description":  "为 DeepSeek Harness 提供外挂识图模型：网页配置面板、发送图片识图自动回传、模型自主截图识图工具，支持多协议与一键安装/卸载。",
     "type":  "module",
     "main":  "lib/index.js",
